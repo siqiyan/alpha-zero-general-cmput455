@@ -57,7 +57,7 @@ class Arena():
             print("Game over: Turn ", str(it), "Result ", str(self.game.getGameEnded(board, 1)))
             self.display(board)
         return self.game.getGameEnded(board, curPlayer)
-        #return curPlayer * self.game.getGameEnded(board, curPlayer) can't figure out why it was like this
+        #return curPlayer * self.game.getGameEnded(board, curPlayer) #can't figure out why it was like this
 
     def playGames(self, num, verbose=False):
         """
