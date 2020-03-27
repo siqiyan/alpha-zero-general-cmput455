@@ -6,15 +6,12 @@ Parts of this code were originally based on the gtp module
 in the Deep-Go project by Isaac Henrion and Amos Storkey 
 at the University of Edinburgh.
 """
-import signal, os
 import traceback
 from sys import stdin, stdout, stderr
-from board_util import GoBoardUtil, BLACK, WHITE, EMPTY, BORDER, PASS, \
+from .board_util import GoBoardUtil, BLACK, WHITE, EMPTY, BORDER, PASS, \
                        MAXSIZE, coord_to_point
 import numpy as np
 import re
-import time
-import random
 
 class GtpConnection():
 
@@ -29,18 +26,6 @@ class GtpConnection():
         board: 
             Represents the current board state.
         """
-        self.totalTime = 0
-        self.count = 0
-        self.nodeExp = 0
-        self.timeLimit = 1
-        self.to_play = BLACK
-        #H table is a dictionary that stores (state,value) pairs
-        #value  =  Black win -> 1, White win -1
-        self.H_table = {}
-        
-        self._winner = ''
-        self._optimal_move = ''
-        
         self._debug_mode = debug_mode
         self.go_engine = go_engine
         self.board = board
@@ -64,9 +49,7 @@ class GtpConnection():
             "gogui-rules_side_to_move": self.gogui_rules_side_to_move_cmd,
             "gogui-rules_board": self.gogui_rules_board_cmd,
             "gogui-rules_final_result": self.gogui_rules_final_result_cmd,
-            "gogui-analyze_commands": self.gogui_analyze_cmd,
-            "timelimit": self.timelimit_cmd,
-            "solve":self.solve_cmd
+            "gogui-analyze_commands": self.gogui_analyze_cmd
         }
 
         # used for argument checking
@@ -78,8 +61,7 @@ class GtpConnection():
             "known_command": (1, 'Usage: known_command CMD_NAME'),
             "genmove": (1, 'Usage: genmove {w,b}'),
             "play": (2, 'Usage: play {b,w} MOVE'),
-            "legal_moves": (1, 'Usage: legal_moves {w,b}'),
-            "timelimit": (1, 'Usage: timelimit INT, 1 <= INT <= 100'),
+            "legal_moves": (1, 'Usage: legal_moves {w,b}')
         }
     
     def write(self, data):
@@ -192,14 +174,6 @@ class GtpConnection():
         """
         self.reset(int(args[0]))
         self.respond()
-     
-    #newly added   
-    def timelimit_cmd(self, args):
-        """
-        Reset the game with new timelimit args[0]
-        """
-        self.timeLimit = int(args[0])
-        self.respond()        
 
     def showboard_cmd(self, args):
         self.respond('\n' + self.board2d())
@@ -249,8 +223,6 @@ class GtpConnection():
                 self.respond("illegal move: \"{}\" wrong color".format(board_color))
                 return
             color = color_to_int(board_color)
-            #change turn to the other player
-            self.to_play = GoBoardUtil.opponent(color)
             if args[1].lower() == 'pass':
                 self.respond("illegal move: \"{} {}\" wrong coordinate".format(args[0], args[1]))
                 return
@@ -271,398 +243,13 @@ class GtpConnection():
         except Exception as e:
             self.respond('illegal move: \"{} {}\" {}'.format(args[0], args[1], str(e)))
 
-    def solve_helper(self):
-
-        
-        winner = 'unknown'
-        
-        #the copy of board can be viewed as a state
-        cp_board = self.board.copy()
-        
-        start = time.time()
-               
-        signal.signal(signal.SIGALRM, handler)
-        signal.alarm(self.timeLimit)
-        try:
-            value,move = self.advanced_search(cp_board,81,-1,1)
-        except Exception as e:
-            value,move = 0,None
-        #print("nodeExp",self.nodeExp)
-        #print("count",self.count)
-        
-        signal.alarm(0) 
-        
-        end = time.time()
-        print("time: ",end - start) 
-        
-        #print("partial time: ",self.totalTime) 
-        if value == 1:
-            winner = 'b'
-        elif value == -1:
-            winner = 'w'
-        
-        
-        
-        if (winner == 'b' and self.to_play !=BLACK) or (winner == 'w' and self.to_play !=WHITE):
-            move = None
-
-        return winner,move
-    
-    #newly added    
-    def solve_cmd(self,args):        
-        moveStr = ''
-        winner,move = self.solve_helper()
-        if move:
-            moveStr = ' '+ coord_to_move(move,self.board.size)            
-        self.respond(winner+moveStr)
-
-   #alpha beta pruning, referencing from wikipedia: https://en.wikipedia.org/wiki/Alpha%E2%80%93beta_pruning
-   #color is the player. black is max player, white is min player
-    def ab_search(self, color, copy_of_board, depth, alpha, beta):
-        _alpha = alpha
-        _beta = beta
-        bestMove = None
-        #base case, no more legal move
-        #print(GoBoardUtil.generate_legal_moves(copy_of_board, color))
-        if depth == 0 or (GoBoardUtil.generate_legal_moves(copy_of_board, color) == []):
-            #depth should always be >0
-            
-            #since NOGO cannot capture nor suiside, if last move is by WHITE/BLACK, it must be a BLACK/WHITE win.
-            if color == WHITE:
-                return 1,None
-            #color == BLACK
-            else:
-                return -1,None
-        
-        #color is black; max player
-        if color == BLACK:
-            value = -1000000
-            #make a copy of current state
-            
-            allmoves = GoBoardUtil.generate_legal_moves(copy_of_board, color)
-            #print("allmoves:")
-            #print(allmoves)
-
-            for move in allmoves:
-                child = copy_of_board.copy()
-                child.play_move(move, color)
-
-                childValue,_ = self.ab_search(WHITE,child,depth-1,_alpha,_beta)
-                value = max(value,childValue)
-                _alpha = max(_alpha,value)
-                bestMove = move
-                #beta cut-off
-                if _alpha >= _beta:
-                    break
-            return value,bestMove
-        #color is white; min player
-        else:
-            value = 1000000
-            allmoves = GoBoardUtil.generate_legal_moves(copy_of_board, color)
-            #print("allmoves:")
-            #print(allmoves)
-            for move in allmoves:
-                child = copy_of_board.copy()
-                child.play_move(move, color)
-                childValue,_ = self.ab_search(BLACK,child,depth-1,_alpha,_beta)
-                value = min(value,childValue)
-                _beta = min(_beta,value)
-                bestMove = move
-                #alpha cut-off
-                if _alpha >= _beta:
-                    break
-            return value,bestMove           
-        
-    def advanced_search(self,copy_of_board,depth,alpha,beta):
-        
-        _alpha = alpha
-        _beta = beta
-        bestMove = None
-        self.nodeExp += 1
-        
-        #base case, depth 0
-        if depth == 0:
-            return 0,None
-        
-        #Start = time.time()
-        allmoves = GoBoardUtil.generate_legal_moves(copy_of_board, copy_of_board.current_player)
-        #End =time.time()
-        #self.totalTime += End-Start 
-        
-        #base case, no more legal move
-        if allmoves == []:
-    
-            #since NOGO cannot capture nor suiside, if last move is by WHITE/BLACK, it must be a BLACK/WHITE win.
-            if copy_of_board.current_player == WHITE:
-                self.H_table[self.tuple_to_str(self.matrix_to_tuple(GoBoardUtil.get_twoD_board(copy_of_board),copy_of_board.size))] = 1
-                return 1,None
-            #color == BLACK
-            else:
-                self.H_table[self.tuple_to_str(self.matrix_to_tuple(GoBoardUtil.get_twoD_board(copy_of_board),copy_of_board.size))] = -1
-                return -1,None
-    
-        
-        
-        searchedMoves = []
-        unsearchedMoves = []
-        unsearched = {}
-        searchedValue = {}
-        
-        isoSet = set()
-        singleMoveIsoSet = set()
-        for move in allmoves:
-            singleMoveIsoSet.clear()
-            child = copy_of_board.copy()
-            child.play_move(move, copy_of_board.current_player)
-
-            #get all isomorphics of the board, in order to prunning as many as redundent states possible
-            isomorphics = self.get_all_isomorphic(GoBoardUtil.get_twoD_board(child),child.size)
-       
-            found = False
-
-            for iso in isomorphics:
-                if self.tuple_to_str(iso) in self.H_table:
-                    found = True
-                    searchedMoves.append(move)
-                    searchedValue[move] = self.H_table[self.tuple_to_str(iso)]
-                    break
-                if iso in isoSet:
-                    found = True
-                    break
-                else:
-                    isoSet.add(iso) 
-                    singleMoveIsoSet.add(iso)
-                 
-            if not found:
-                '''
-                the following is the heuristic I created for ordering the moves:
-                (1) eye-filling is the last thing we want to do;
-                (2) the few the number of player's stones with MD 1, the better;
-                (3) the more the number of opponent's stones with MD 1, the better;
-                (4) the more the number of player's stones with MD 2, the better;
-                '''
-
-                num_same = 49
-                dis1 = [move+1,move-1,move+child.size+1,move-child.size-1]
-                dis2 = [move+2,move-2,move+2*(child.size+1),move-2*(child.size+1),move+child.size+2,move-child.size-2,move+child.size,move-child.size]
-                
-                valid1 = []
-                
-                for point in dis1:
-                    x = point%(child.size+1)
-                    y = point//(child.size+1) 
-                    if 1<=x<=child.size and 1<=y<=child.size:
-                        valid1.append(point)
-
-                valid2 = []
-                for point in dis2:
-                    x = point%(child.size+1)
-                    y = point//(child.size+1) 
-                    if 1<=x<=child.size and 1<=y<=child.size:
-                        valid2.append(point) 
-                
-                if copy_of_board.is_eye(move,copy_of_board.current_player):
-                    num_same += 1000
-                for point in valid1:
-                    if child.get_color(point)==copy_of_board.current_player:
-                        num_same += 100
-                    if child.get_color(point)== BLACK+WHITE-copy_of_board.current_player:
-                        num_same -= 10
-
-
-                for point in valid2:
-                    if child.get_color(point)==copy_of_board.current_player:
-                        num_same -= 1
-
-                unsearched[move] =  num_same
- 
-                
-        #print("dic:",unsearched)
-        #print("searched:",searchedMoves)
-        
-        #sorting unsearched moves by the heuristic value
-        sorted_x = sorted(unsearched.items(), key=lambda kv: kv[1])
-        for item in sorted_x:
-            unsearchedMoves.append(item[0])  
-        
-        orderedMoves = searchedMoves + unsearchedMoves
-
-        self.count += len(allmoves) - len(orderedMoves)
-        
-        
-        state = self.tuple_to_str(self.matrix_to_tuple(GoBoardUtil.get_twoD_board(copy_of_board),copy_of_board.size))
-
-        #below is normal alpha-beta search
-        #color is black; max player
-        if copy_of_board.current_player == BLACK:
-            value = -1000000
-            #make a copy of current state
-            
-            for move in orderedMoves:
-                if move  in searchedMoves:
-                    childValue = searchedValue[move]
-                else:
-                    child = copy_of_board.copy()
-                    child.play_move(move, copy_of_board.current_player)                    
-                    childValue,_ = self.advanced_search(child,depth-1,_alpha,_beta)
-                    #childValue,_ = self.advanced_search(copy_of_board,depth-1,_alpha,_beta)
-                value = max(value,childValue)
-                _alpha = max(_alpha,value)
-                bestMove = move
-                #beta cut-off
-                if _alpha >= _beta:
-                    break
-            self.H_table[state] = value  
-            return value,bestMove
-        #color is white; min player
-        else:
-            value = 1000000
-
-            for move in orderedMoves:
-                if move  in searchedMoves:
-                    childValue = searchedValue[move]
-                else:
-                    child = copy_of_board.copy()
-                    child.play_move(move, copy_of_board.current_player)                    
-                    #childValue,_ = self.advanced_search(copy_of_board,depth-1,_alpha,_beta)
-                    childValue,_ = self.advanced_search(child,depth-1,_alpha,_beta)
-                value = min(value,childValue)
-                _beta = min(_beta,value)
-                bestMove = move
-                #alpha cut-off
-                if _alpha >= _beta:
-                    break
-            self.H_table[state] = value  
-            return value,bestMove             
-
-
-    
-        
-    def get_all_isomorphic(self, board_2d,size):
-        """
-        input: matrix of a board
-        output: a set of tuples
-        """      
-        isomorphics = set()
-        
-        
-        #original
-
-        #print("mat to tuple:")
-        #print(self.matrix_to_tuple(board_2d,size))
-        isomorphics.add(self.matrix_to_tuple(board_2d,size))
-        
-        #return isomorphics
-        tmp_board = []
-        #reflectional sym, 2 cases
-        
-        #swap rows
-        cp_board_2dx = board_2d.copy()
-        for i in range(size//2):
-            tmp = cp_board_2dx[i,:].copy()
-            cp_board_2dx[i,:] = cp_board_2dx[size-1-i,:] 
-            cp_board_2dx[size-1-i,:]=tmp
- 
-        isomorphics.add(self.matrix_to_tuple(cp_board_2dx,size)) 
-        
-        #swap columns
-        cp_board_2dy = board_2d.copy()
-        for j in range(size//2):
-            for i in range(size):
-                tmp = cp_board_2dy[i,j]
-                cp_board_2dy[i,j] = cp_board_2dy[i,size-1-j] 
-                cp_board_2dy[i,size-1-j] = tmp
-   
-        isomorphics.add(self.matrix_to_tuple(cp_board_2dy,size))         
-        
-        #rotational sym, 3 cases
-        board_90 = np.rot90(board_2d)
-       #board_90 = self.rotateMatrix(board_2d,size)
-        isomorphics.add(self.matrix_to_tuple(board_90,size)) 
-        
-        #reflectional sym of 90 degree, 2 cases
-        #swap rows
-        cp_board_90x = board_90.copy()
-        for i in range(size//2):
-            tmp = cp_board_90x[i,:].copy()
-            cp_board_90x[i,:] = cp_board_90x[size-1-i,:] 
-            cp_board_90x[size-1-i,:] = tmp
- 
-        isomorphics.add(self.matrix_to_tuple(cp_board_90x,size)) 
-        
-        #swap columns
-        cp_board_90y = board_90.copy()
-        for j in range(size//2):
-            for i in range(size):
-                tmp = cp_board_90y[i,j]
-                cp_board_90y[i,j] = cp_board_90y[i,size-1-j] 
-                cp_board_90y[i,size-1-j] = tmp
-   
-        isomorphics.add(self.matrix_to_tuple(cp_board_90y,size))            
-        
-        #print("90",board_90)
-        board_180 = np.rot90(board_90)
-        #print("180",board_180)
-        isomorphics.add(self.matrix_to_tuple(board_180,size))  
-
-        board_270 = np.rot90(board_180)
-        #print("270",board_270)
-        isomorphics.add(self.matrix_to_tuple(board_270,size))         
-        #board_180 = self.rotateMatrix(board_90,size)
-        #isomorphics.add(self.matrix_to_tuple(board_180,size)) 
-        #board_270 = self.rotateMatrix(board_180,size)
-        #isomorphics.add(self.matrix_to_tuple(board_270,size))         
-        
-        return isomorphics
-    
-    
-    
-    def matrix_to_tuple(self,matrix,dim):      
-        board1d = np.zeros((dim* dim), dtype = np.int32)
-        for i in range(dim):
-            board1d[i*dim:i*dim+dim] = matrix[i,:]
-        return tuple(board1d)    
-
-    def get_oneD_board(self,goboard):
-        """
-        Return: numpy array
-        a 1-d numpy array with the stones as the goboard.
-        Does not pad with BORDER
-        Rows 1..size of goboard are copied into rows 0..size - 1 of board2d
-        """
-        size = goboard.size
-        board1d = np.zeros((size* size), dtype = np.int32)
-        for row in range(size):
-            start = goboard.row_start(row + 1)
-            board1d[row*size:row*size+size] = goboard.board[start : start + size]
-        return board1d    
-    
-    def tuple_to_str(self,tup):
-        res = ''
-        for i in tup:
-            res +=  str(int(i))
-        return res        
-    
-    #genemove overrided
     def genmove_cmd(self, args):
         """
         Generate a move for the color args[0] in {'b', 'w'}, for the game of gomoku.
         """
         board_color = args[0].lower()
         color = color_to_int(board_color)
-        
-        self.to_play = color
-        winnerStr,optMove = self.solve_helper()
-        winner = EMPTY
-        if winnerStr=='b':
-            winner = BLACK
-        elif winnerStr =='w':
-            winner = WHITE
-        #if current player is winner, we will take bestmove; otherwise we should take a random move
-        if board_color == winner:
-            move = optMove
-        else:
-            move = GoBoardUtil.generate_random_move(self.board, color,False)
+        move = self.go_engine.get_move(self.board.copy(), color)
         move_coord = point_to_coord(move, self.board.size)
         move_as_string = format_point(move_coord)
         if self.board.is_legal(move, color):
@@ -670,7 +257,6 @@ class GtpConnection():
             self.respond(move_as_string)
         else:
             self.respond("resign")
-
 
     def gogui_rules_game_id_cmd(self, args):
         self.respond("NoGo")
@@ -805,29 +391,8 @@ def move_to_coord(point_str, board_size):
         raise ValueError("wrong coordinate")
     return row, col
 
-def coord_to_move(move, board_size):
-    """
-    Convert a string point_str representing a point, as specified by GTP,
-    to a pair of coordinates (row, col) in range 1 .. board_size.
-    Raises ValueError if point_str is invalid
-    """
-    if not 2 <= board_size <= MAXSIZE:
-        raise ValueError("board_size out of range")
-    #s = point_str.lower()
-    x = move%(board_size+1)
-    y = move//(board_size+1)
-    col = chr(x-1 + ord("a"))
-    #col = col.upper()
-    
-    return col+str(y)
-
-
 def color_to_int(c):
     """convert character to the appropriate integer code"""
     color_to_int = {"b": BLACK , "w": WHITE, "e": EMPTY, 
                     "BORDER": BORDER}
     return color_to_int[c] 
-
-def handler(signum, frame):
-    print('Signal handler called with signal', signum)
-    raise Exception("Timeout!")
