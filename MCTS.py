@@ -35,8 +35,11 @@ class MCTS():
             self.search(canonicalBoard)
         self.game.endSearch()
 
+
+
         s = self.game.stringRepresentation(canonicalBoard)
         counts = [self.Nsa[(s,a)] if (s,a) in self.Nsa else 0 for a in range(self.game.getActionSize())]
+        #print(counts)
 
         if temp==0:
             bestA = np.argmax(counts)
@@ -69,11 +72,13 @@ class MCTS():
         Returns:
             v: the negative of the value of the current canonicalBoard
         """
-        canonicalBoard = self.game.getCanonicalForm(canonicalBoard,1)
+        canonicalBoard = self.game.getCanonicalForm(canonicalBoard, 1)
         s = self.game.stringRepresentation(canonicalBoard)
+        #print(self.game.board.current_player)
+        #print(canonicalBoard)
 
         if s not in self.Es:
-            self.Es[s] = self.game.getGameEnded(canonicalBoard, 1)
+            self.Es[s] = self.game.getGameEnded(canonicalBoard, 1, True)
         if self.Es[s]!=0:
             # terminal node
             return -self.Es[s]
@@ -81,7 +86,7 @@ class MCTS():
         if s not in self.Ps:
             # leaf node
             self.Ps[s], v = self.nnet.predict(canonicalBoard)
-            valids = self.game.getValidMoves(canonicalBoard, 1)
+            valids = self.game.getValidMoves(canonicalBoard, 1, True)
             self.Ps[s] = self.Ps[s]*valids      # masking invalid moves
             sum_Ps_s = np.sum(self.Ps[s])
             if sum_Ps_s > 0:
@@ -117,7 +122,16 @@ class MCTS():
                     best_act = a
 
         a = best_act
-        next_s, next_player = self.game.getNextState(canonicalBoard, 1, a)
+        try:
+            next_s, next_player = self.game.getNextState(canonicalBoard, 1, a)
+        except:
+            self.Vs[s][a] = 0
+            if self.Vs[s].sum() == 0:
+                self.Es[s] = -1
+            else:
+                self.Ps[s] = self.Ps[s] / (1 - self.Ps[s][a])
+                self.Ps[s][a] = 0
+            return self.search(canonicalBoard)
         next_s = self.game.getCanonicalForm(next_s, next_player)
 
         v = self.search(next_s)

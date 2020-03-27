@@ -54,9 +54,9 @@ class NogoGame(Game):
 
     def getActionSize(self):
         # return number of actions
-        return self.n*self.n + 1
+        return self.n*self.n
 
-    def getNextState(self, board , player, action, fast=False):
+    def getNextState(self, board, player, action, fast=False):
         # if player takes action on board, return next (board,player)
         # action must be a valid move
         if fast:
@@ -65,7 +65,7 @@ class NogoGame(Game):
             return board, -player
         action = self.convert_point(action)
         self.board.play_move(action, self.board.current_player)
-        return self.get_pieces(), -self.convert_back_color()
+        return self.get_pieces(), self.convert_back_color()
 
 
     def convert_color(self, player):
@@ -94,24 +94,29 @@ class NogoGame(Game):
         row, col = self.board._point_to_coord(point)
         return (row - 1)*(self.n) + (col - 1)
 
-    def getValidMoves(self, _, __):
+    def getValidMoves(self, board, player, search=False):
         # return a fixed size binary vector
         color = self.board.current_player
         moves = self.board.get_empty_points()
-        legal = []
-        for move in moves:
-            if self.board.is_legal(move, color):
-                legal.append(move)
+        if search:
+            legal = moves
+        else:
+            legal = []
+            for move in moves:
+                if self.board.is_legal(move, color):
+                    legal.append(move)
         valids = [0]*self.getActionSize()
         for point in legal:
             valids[self.convert_back_point(point)] = 1
         return np.array(valids)
 
 
-    def getGameEnded(self, _, __):
+    def getGameEnded(self, board, player, search=False):
         # return 0 if not ended, 1 if player 1 won, -1 if player 1 lost
         # player = 1
-        legal_moves = self.getValidMoves(_,__)
+        if search:
+            return 0
+        legal_moves = self.getValidMoves(board, player)
         if legal_moves.max() == 1:
             return 0
         else:
@@ -132,8 +137,8 @@ class NogoGame(Game):
 
     def getSymmetries(self, board, pi):
         # mirror, rotational
-        assert(len(pi) == self.n**2+1)  # 1 for pass
-        pi_board = np.reshape(pi[:-1], (self.n, self.n))
+        assert(len(pi) == self.n**2)
+        pi_board = np.reshape(pi, (self.n, self.n))
         l = []
 
         for i in range(1, 5):
@@ -143,7 +148,7 @@ class NogoGame(Game):
                 if j:
                     newB = np.fliplr(newB)
                     newPi = np.fliplr(newPi)
-                l += [(newB, list(newPi.ravel()) + [pi[-1]])]
+                l += [(newB, list(newPi.ravel()))]
         return l
 
     def stringRepresentation(self, board):

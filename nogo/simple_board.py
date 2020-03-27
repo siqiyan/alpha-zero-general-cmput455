@@ -253,6 +253,7 @@ class SimpleGoBoard(object):
             if self.board[nb] == opp_color:
                 single_capture = self._detect_and_process_capture(nb)
                 if single_capture == True:
+                    self.board[point] = EMPTY
                     raise ValueError("capture")
         if not self._stone_has_liberty(point):
             # check suicide of whole block

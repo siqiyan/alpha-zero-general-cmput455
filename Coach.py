@@ -6,6 +6,7 @@ from pytorch_classification.utils import Bar, AverageMeter
 import time, os, sys
 from pickle import Pickler, Unpickler
 from random import shuffle
+from concurrent.futures import ProcessPoolExecutor as PPE
 
 
 class Coach():
@@ -58,6 +59,7 @@ class Coach():
             board, self.curPlayer = self.game.getNextState(board, self.curPlayer, action)
             r = self.game.getGameEnded(board,self.curPlayer)
 
+
             if r!=0:
                 return [(x[0],x[2],r*((-1)**(x[1]!=self.curPlayer))) for x in trainExamples]
 
@@ -80,7 +82,7 @@ class Coach():
                 eps_time = AverageMeter()
                 bar = Bar('Self Play', max=self.args.numEps)
                 end = time.time()
-    
+
                 for eps in range(self.args.numEps):
                     self.mcts = MCTS(self.game, self.nnet, self.args)   # reset search tree
                     iterationTrainExamples += self.executeEpisode()
