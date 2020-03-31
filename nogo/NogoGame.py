@@ -122,9 +122,13 @@ class NogoGame(Game):
         else:
             return -self.convert_back_color()
 
-    def getCanonicalForm(self, board, player):
+    def getCanonicalForm(self, board, player, search=True):
         # return state if player==1, else return -state if player==-1
-        return self.convert_back_color()*self.get_pieces()
+        if search:
+            return self.convert_back_color()*self.get_pieces()
+        else:
+            self.board = board
+            return player * self.get_pieces()
 
     def get_pieces(self):
         pieces = GoBoardUtil.get_twoD_board(self.board)
