@@ -18,19 +18,18 @@ class Nogo():
         self.name = "NoGoAlphaZeroGeneral"
         self.version = 1.0
 
-        self.g = NogoGame(5)
+        self.g = NogoGame(7)
         self.n1 = nn(self.g)
-        self.n1.load_checkpoint('./pretrained_models/nogo5x5/','best.pth.tar')
+        self.n1.load_checkpoint('./pretrained_models/nogo7x7/','best.pth.tar')
         args1 = dotdict({'numMCTSSims': 50, 'cpuct':1.0})
         self.mcts = MCTS(self.g, self.n1, args1)
         self.n1p = lambda x: np.argmax(self.mcts.getActionProb(x, temp=0))
         
     def get_move(self, board, color):
+        self.g.board.current_player = color
         curPlayer = 1 if color == BLACK else -1
         canonicalBoard = self.g.getCanonicalForm(board, curPlayer, False)
-        valids = self.g.getValidMoves(canonicalBoard, curPlayer, False)
         action = self.n1p(canonicalBoard)
-        assert valids[action]== 1
         point = self.g.convert_point(action)
         return point
     
@@ -38,8 +37,8 @@ def run():
     """
     start the gtp connection and wait for commands.
     """
-    board = SimpleGoBoard(5)
-    con = GtpConnection(Nogo(), board)
+
+    con = GtpConnection(Nogo())
     con.start_connection()
     con.play_cmd()
 

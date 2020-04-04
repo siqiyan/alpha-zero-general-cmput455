@@ -1,4 +1,5 @@
 *.pyc
 *.swp
+*.sgf
 __pycache__
 temp

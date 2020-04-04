@@ -48,6 +48,9 @@ class NogoGame(Game):
         self.board.reset(self.n)
         return self.get_pieces()
 
+    def reset(self, size):
+        self.board.reset(self.n)
+
     def getBoardSize(self):
         # (a,b) tuple
         return (self.n, self.n)
@@ -83,10 +86,10 @@ class NogoGame(Game):
         else: return None
 
     def convert_coord(self, coord):
-        return ((coord[0] + 1), (coord[1] + 1))
+        return (self.n - coord[0] , coord[1] + 1)
 
     def convert_point(self, point):
-        coord = (int(point/self.n), point%self.n)
+        coord = (self.n - 1 - int(point/self.n), point%self.n)
         coord = self.convert_coord(coord)
         return coord_to_point(coord[0],coord[1],self.n)
 
@@ -122,13 +125,9 @@ class NogoGame(Game):
         else:
             return -self.convert_back_color()
 
-    def getCanonicalForm(self, board, player, search=True):
+    def getCanonicalForm(self, board, player, search=False):
         # return state if player==1, else return -state if player==-1
-        if search:
-            return self.convert_back_color()*self.get_pieces()
-        else:
-            self.board = board
-            return player * self.get_pieces()
+        return self.convert_back_color()*self.get_pieces()
 
     def get_pieces(self):
         pieces = GoBoardUtil.get_twoD_board(self.board)

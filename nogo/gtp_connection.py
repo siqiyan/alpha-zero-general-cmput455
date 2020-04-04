@@ -15,7 +15,7 @@ import re
 
 class GtpConnection():
 
-    def __init__(self, go_engine, board, debug_mode = False):
+    def __init__(self, go_engine, debug_mode = False):
         """
         Manage a GTP connection for a Go-playing engine
 
@@ -28,7 +28,7 @@ class GtpConnection():
         """
         self._debug_mode = debug_mode
         self.go_engine = go_engine
-        self.board = board
+        self.board = go_engine.g.board
         self.commands = {
             "protocol_version": self.protocol_version_cmd,
             "quit": self.quit_cmd,
@@ -141,7 +141,7 @@ class GtpConnection():
         """
         Reset the board to empty board of given size
         """
-        self.board.reset(size)
+        self.go_engine.g.reset(size)
 
     def board2d(self):
         return str(GoBoardUtil.get_twoD_board(self.board))
@@ -233,7 +233,7 @@ class GtpConnection():
                 self.error("Error executing move {} converted from {}"
                            .format(move, args[1]))
                 return
-            if not self.board.play_move(move, color):
+            if not self.go_engine.g.board.play_move(move, color):
                 self.respond("illegal move: \"{} {}\" ".format(args[0], board_move))
                 return
             else:
@@ -252,8 +252,8 @@ class GtpConnection():
         move = self.go_engine.get_move(self.board.copy(), color)
         move_coord = point_to_coord(move, self.board.size)
         move_as_string = format_point(move_coord)
-        if self.board.is_legal(move, color):
-            self.board.play_move(move, color)
+        if self.go_engine.g.board.is_legal(move, color):
+            self.go_engine.g.board.play_move(move, color)
             self.respond(move_as_string)
         else:
             self.respond("resign")
