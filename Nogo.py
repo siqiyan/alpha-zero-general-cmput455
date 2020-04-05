@@ -21,7 +21,7 @@ class Nogo():
         self.g = NogoGame(7)
         self.n1 = nn(self.g)
         self.n1.load_checkpoint('./pretrained_models/nogo7x7/','best.pth.tar')
-        args1 = dotdict({'numMCTSSims': 50, 'cpuct':1.0})
+        args1 = dotdict({'numMCTSSims': 200, 'cpuct':1.0})
         self.mcts = MCTS(self.g, self.n1, args1)
         self.n1p = lambda x: np.argmax(self.mcts.getActionProb(x, temp=0))
         

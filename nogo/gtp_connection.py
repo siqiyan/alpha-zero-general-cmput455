@@ -28,7 +28,6 @@ class GtpConnection():
         """
         self._debug_mode = debug_mode
         self.go_engine = go_engine
-        self.board = go_engine.g.board
         self.commands = {
             "protocol_version": self.protocol_version_cmd,
             "quit": self.quit_cmd,
@@ -144,7 +143,7 @@ class GtpConnection():
         self.go_engine.g.reset(size)
 
     def board2d(self):
-        return str(GoBoardUtil.get_twoD_board(self.board))
+        return str(GoBoardUtil.get_twoD_board(self.go_engine.g.board))
         
     def protocol_version_cmd(self, args):
         """ Return the GTP protocol version being used (always 2) """
@@ -165,7 +164,7 @@ class GtpConnection():
 
     def clear_board_cmd(self, args):
         """ clear the board """
-        self.reset(self.board.size)
+        self.reset(self.go_engine.g.board.size)
         self.respond()
 
     def boardsize_cmd(self, args):
@@ -204,10 +203,10 @@ class GtpConnection():
         """
         board_color = args[0].lower()
         color = color_to_int(board_color)
-        moves = GoBoardUtil.generate_legal_moves(self.board, color)
+        moves = GoBoardUtil.generate_legal_moves(self.go_engine.g.board, color)
         gtp_moves = []
         for move in moves:
-            coords = point_to_coord(move, self.board.size)
+            coords = point_to_coord(move, self.go_engine.g.board.size)
             gtp_moves.append(format_point(coords))
         sorted_moves = ' '.join(sorted(gtp_moves))
         self.respond(sorted_moves)
@@ -226,9 +225,9 @@ class GtpConnection():
             if args[1].lower() == 'pass':
                 self.respond("illegal move: \"{} {}\" wrong coordinate".format(args[0], args[1]))
                 return
-            coord = move_to_coord(args[1], self.board.size)
+            coord = move_to_coord(args[1], self.go_engine.g.board.size)
             if coord:
-                move = coord_to_point(coord[0],coord[1], self.board.size)
+                move = coord_to_point(coord[0],coord[1], self.go_engine.g.board.size)
             else:
                 self.error("Error executing move {} converted from {}"
                            .format(move, args[1]))
@@ -249,8 +248,8 @@ class GtpConnection():
         """
         board_color = args[0].lower()
         color = color_to_int(board_color)
-        move = self.go_engine.get_move(self.board.copy(), color)
-        move_coord = point_to_coord(move, self.board.size)
+        move = self.go_engine.get_move(self.go_engine.g.board.copy(), color)
+        move_coord = point_to_coord(move, self.go_engine.g.board.size)
         move_as_string = format_point(move_coord)
         if self.go_engine.g.board.is_legal(move, color):
             self.go_engine.g.board.play_move(move, color)
@@ -262,7 +261,7 @@ class GtpConnection():
         self.respond("NoGo")
     
     def gogui_rules_board_size_cmd(self, args):
-        self.respond(str(self.board.size))
+        self.respond(str(self.go_engine.g.board.size))
     
     def legal_moves_cmd(self, args):
         """
@@ -270,40 +269,40 @@ class GtpConnection():
             """
         board_color = args[0].lower()
         color = color_to_int(board_color)
-        moves = GoBoardUtil.generate_legal_moves(self.board, color)
+        moves = GoBoardUtil.generate_legal_moves(self.go_engine.g.board, color)
         gtp_moves = []
         for move in moves:
-            coords = point_to_coord(move, self.board.size)
+            coords = point_to_coord(move, self.go_engine.g.board.size)
             gtp_moves.append(format_point(coords))
         sorted_moves = ' '.join(sorted(gtp_moves))
         self.respond(sorted_moves)
 
     def gogui_rules_legal_moves_cmd(self, args):
-        empties = self.board.get_empty_points()
-        color = self.board.current_player
+        empties = self.go_engine.g.board.get_empty_points()
+        color = self.go_engine.g.board.current_player
         legal_moves = []
         for move in empties:
-            if self.board.is_legal(move, color):
+            if self.go_engine.g.board.is_legal(move, color):
                 legal_moves.append(move)
 
         gtp_moves = []
         for move in legal_moves:
-            coords = point_to_coord(move, self.board.size)
+            coords = point_to_coord(move, self.go_engine.g.board.size)
             gtp_moves.append(format_point(coords))
         sorted_moves = ' '.join(sorted(gtp_moves))
         self.respond(sorted_moves)
     
     def gogui_rules_side_to_move_cmd(self, args):
-        color = "black" if self.board.current_player == BLACK else "white"
+        color = "black" if self.go_engine.g.board.current_player == BLACK else "white"
         self.respond(color)
     
     def gogui_rules_board_cmd(self, args):
-        size = self.board.size
+        size = self.go_engine.g.board.size
         str = ''
         for row in range(size-1, -1, -1):
-            start = self.board.row_start(row + 1)
+            start = self.go_engine.g.board.row_start(row + 1)
             for i in range(size):
-                point = self.board.board[start + i]
+                point = self.go_engine.g.board[start + i]
                 if point == BLACK:
                     str += 'X'
                 elif point == WHITE:
@@ -316,14 +315,14 @@ class GtpConnection():
         self.respond(str)
     
     def gogui_rules_final_result_cmd(self, args):
-        empties = self.board.get_empty_points()
-        color = self.board.current_player
+        empties = self.go_engine.g.board.get_empty_points()
+        color = self.go_engine.g.board.current_player
         legal_moves = []
         for move in empties:
-            if self.board.is_legal(move, color):
+            if self.go_engine.g.board.is_legal(move, color):
                 legal_moves.append(move)
         if not legal_moves:
-            result = "black" if self.board.current_player == WHITE else "white"
+            result = "black" if self.go_engine.g.board.current_player == WHITE else "white"
         else:
             result = "unknown"
         self.respond(result)
