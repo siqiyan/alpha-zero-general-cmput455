@@ -1,3 +1,6 @@
+# Note
+***I am no longer maintain this repository. There may be security vulnerabilities due to out-of-date packages. Use at your own risk!***
+
 # Alpha Zero General (any game, any framework!)
 
 ## Forked from https://github.com/suragnair/alpha-zero-general
